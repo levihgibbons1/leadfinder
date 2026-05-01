@@ -151,7 +151,7 @@ export default function LeadFinderPage() {
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name !== 'AbortError') {
-        setError('Could not connect to LeadFinder API. Make sure it is running on port 8502.')
+        setError(`Could not connect to LeadFinder API at ${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8502'}`)
       }
     }
 
