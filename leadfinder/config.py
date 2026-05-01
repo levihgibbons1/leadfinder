@@ -48,7 +48,7 @@ def get_settings() -> Settings:
         sqlite_path=DATA_DIR / "leads.db",
         database_url=get_secret("DATABASE_URL", ""),
         excel_path=DATA_DIR / "leads.xlsx",
-        app_password=get_secret("APP_PASSWORD", "skibidi123"),
+        app_password=get_secret("APP_PASSWORD", "vanguardcreatives"),
         rapidapi_key=get_secret("RAPIDAPI_KEY", ""),
         rapidapi_host=get_secret("RAPIDAPI_HOST", "local-business-data.p.rapidapi.com"),
         rapidapi_base_url=get_secret("RAPIDAPI_BASE_URL", "https://local-business-data.p.rapidapi.com"),
