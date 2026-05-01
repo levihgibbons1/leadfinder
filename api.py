@@ -96,6 +96,6 @@ async def search(request: SearchRequest):
     return StreamingResponse(stream(), media_type="text/event-stream")
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 async def health():
     return {"ok": True}
