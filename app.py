@@ -219,11 +219,111 @@ def inject_styles() -> None:
         }
 
         [data-testid="stSidebar"] {
-            border-right: 1px solid #e5e7eb;
+            background: #111111;
+            border-right: 1px solid #111111;
         }
 
         [data-testid="stSidebar"] .block-container {
-            padding-top: 1.25rem;
+            padding: 1.35rem 1rem 1.5rem;
+        }
+
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] span {
+            color: #f9fafb;
+        }
+
+        [data-testid="stSidebar"] hr {
+            border-color: #2f2f2f;
+            margin: 1.15rem 0;
+        }
+
+        [data-testid="stSidebar"] [data-testid="stRadio"] > label {
+            display: none;
+        }
+
+        [data-testid="stSidebar"] div[role="radiogroup"] {
+            gap: 0.25rem;
+        }
+
+        [data-testid="stSidebar"] div[role="radiogroup"] label {
+            align-items: center;
+            border: 1px solid transparent;
+            border-radius: 0.7rem;
+            display: flex;
+            margin: 0.08rem 0;
+            min-height: 2.55rem;
+            padding: 0.55rem 0.75rem;
+            transition: background 120ms ease, border-color 120ms ease;
+        }
+
+        [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+            background: #1f1f1f;
+            border-color: #333333;
+        }
+
+        [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+            background: #ffffff;
+            border-color: #ffffff;
+        }
+
+        [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p,
+        [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) span {
+            color: #111111;
+            font-weight: 700;
+        }
+
+        [data-testid="stSidebar"] div[role="radiogroup"] label > div:first-child {
+            display: none;
+        }
+
+        .suite-brand {
+            align-items: center;
+            display: flex;
+            gap: 0.75rem;
+            padding: 0.25rem 0 0.45rem;
+        }
+
+        .suite-mark {
+            align-items: center;
+            background: #ffffff;
+            border-radius: 0.65rem;
+            color: #111111;
+            display: flex;
+            font-size: 0.82rem;
+            font-weight: 800;
+            height: 2.35rem;
+            justify-content: center;
+            letter-spacing: -0.02em;
+            width: 2.35rem;
+        }
+
+        .suite-name {
+            color: #ffffff;
+            font-size: 1.02rem;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+
+        .suite-subname {
+            color: #a3a3a3;
+            font-size: 0.76rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            margin-top: 0.12rem;
+            text-transform: uppercase;
+        }
+
+        .sidebar-section-label {
+            color: #9ca3af;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.55rem;
+            text-transform: uppercase;
         }
 
         .stButton > button,
@@ -847,8 +947,20 @@ def render_header(history_df: pd.DataFrame) -> None:
 
 def render_suite_sidebar() -> str:
     with st.sidebar:
-        st.header("Vanguard Suite")
+        st.markdown(
+            """
+            <div class="suite-brand">
+                <div class="suite-mark">VC</div>
+                <div>
+                    <div class="suite-name">Vanguard</div>
+                    <div class="suite-subname">Suite</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.divider()
+        st.markdown('<div class="sidebar-section-label">Workspace</div>', unsafe_allow_html=True)
         page = st.radio(
             "Navigation",
             ["Dashboard", "Leads", "Follow Ups", "Clients", "LeadFinder", "Activity"],
