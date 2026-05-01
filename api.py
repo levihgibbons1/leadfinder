@@ -35,7 +35,7 @@ app.add_middleware(
 
 def _build_pipeline() -> LeadPipeline:
     settings = get_settings()
-    db = LeadDatabase(settings)
+    db = LeadDatabase(sqlite_path=settings.sqlite_path, database_url=settings.database_url)
     return LeadPipeline(
         settings=settings,
         database=db,
