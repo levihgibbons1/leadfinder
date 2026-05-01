@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: leadfinder-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: RAPIDAPI_HOST
+        value: local-business-data.p.rapidapi.com
+      - key: RAPIDAPI_BASE_URL
+        value: https://local-business-data.p.rapidapi.com
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: CORS_ORIGINS
+        sync: false
