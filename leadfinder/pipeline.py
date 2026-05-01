@@ -54,7 +54,6 @@ class LeadPipeline:
 
         self._progress(progress_callback, 0.92, "Saving leads to SQLite and Excel...")
         self.database.upsert_leads(processed)
-        self.database.record_saved_search(search_input, len(processed))
         self.excel_exporter.upsert_leads(processed)
         self._progress(progress_callback, 1.0, "Lead search complete.")
         return processed

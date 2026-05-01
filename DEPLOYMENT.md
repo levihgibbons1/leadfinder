@@ -20,7 +20,7 @@ Use the pooled connection string for hosted Streamlit. It should look similar to
 postgresql://postgres.[project-ref]:[password]@aws-0-us-west-1.pooler.supabase.com:6543/postgres
 ```
 
-LeadFinder creates the `leads`, `lead_events`, and `saved_searches` tables automatically on first run.
+LeadFinder creates the `leads` table automatically on first run.
 
 ## 2. Push LeadFinder To GitHub
 
