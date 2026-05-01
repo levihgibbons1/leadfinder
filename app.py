@@ -465,7 +465,7 @@ def require_password() -> bool:
     if st.session_state.get("authenticated", False):
         return True
 
-    st.title("LeadFinder")
+    st.title("Vanguard Suite")
     st.caption("Enter the team password to continue.")
     with st.form("password_gate"):
         password = st.text_input("Password", type="password")
@@ -833,9 +833,9 @@ def render_header(history_df: pd.DataFrame) -> None:
     client_count = int((history_df["status"] == "Client").sum()) if not history_df.empty else 0
     states = int(history_df["state"].nunique()) if not history_df.empty else 0
 
-    st.title("LeadFinder")
+    st.title("Vanguard Suite")
     st.markdown(
-        '<div class="helper-text">Team dashboard for finding, tracking, and following up with smaller-town blue-collar leads.</div>',
+        '<div class="helper-text">Internal operating dashboard for Vanguard Creatives: pipeline tracking, follow-ups, lead intelligence, and client progress.</div>',
         unsafe_allow_html=True,
     )
     st.write("")
@@ -851,15 +851,45 @@ def render_header(history_df: pd.DataFrame) -> None:
         st.metric("Clients", f"{client_count:,}", help=f"{states:,} states covered")
 
 
-def render_sidebar() -> tuple[SearchInput | None, bool]:
+def render_suite_sidebar(history_df: pd.DataFrame) -> None:
     settings = get_settings()
+
+    with st.sidebar:
+        st.header("Vanguard Suite")
+        st.caption("Business command center for leads, follow-ups, and client progress.")
+        st.divider()
+
+        active_count = int(history_df["status"].isin(ACTIVE_STATUS_OPTIONS).sum()) if not history_df.empty else 0
+        due_count = count_due_followups(history_df)
+        client_count = int((history_df["status"] == "Client").sum()) if not history_df.empty else 0
+
+        st.metric("Active pipeline", f"{active_count:,}")
+        st.metric("Follow-ups due", f"{due_count:,}")
+        st.metric("Clients", f"{client_count:,}")
+
+        st.divider()
+        st.subheader("Suite Areas")
+        st.caption("Command Center: overview and progress tracking")
+        st.caption("Pipeline Sheet: editable team lead sheet")
+        st.caption("Follow Ups: daily work queue")
+        st.caption("Client Board: won accounts and delivery notes")
+        st.caption("LeadFinder: search and enrichment tool")
+        st.caption("Activity: saved searches and update history")
+
+        st.divider()
+        st.subheader("Storage")
+        st.caption("Lead data is saved automatically.")
+        st.caption(f"Database: `{settings.sqlite_path.name}`")
+
+
+def render_leadfinder_controls() -> tuple[SearchInput | None, bool]:
     current_state = st.session_state.get(STATE_KEY, STATE_PLACEHOLDER)
     if current_state in STATE_ABBR_TO_NAME:
         st.session_state[STATE_KEY] = state_name(current_state)
 
-    with st.sidebar:
-        st.header("Search")
-        st.caption("Fill in the market you want to target, then run a search.")
+    with st.container(border=True):
+        st.markdown("#### Search Inputs")
+        st.caption("Use this tool when you want to add fresh businesses into the main Vanguard pipeline.")
 
         random_cols = st.columns(2)
         preferred_state = st.session_state.get(STATE_KEY, STATE_PLACEHOLDER)
@@ -876,7 +906,6 @@ def render_sidebar() -> tuple[SearchInput | None, bool]:
                 st.session_state[STATE_KEY] = state_name(state)
                 st.session_state[CATEGORY_KEY] = random.choice(SUGGESTED_CATEGORIES)
                 st.session_state[CUSTOM_CATEGORY_KEY] = ""
-        st.caption("Use the random buttons when you want a smaller-town idea instead of picking a city yourself.")
 
         category = st.selectbox(
             "Business category",
@@ -912,11 +941,6 @@ def render_sidebar() -> tuple[SearchInput | None, bool]:
         )
         run_search = st.button("Run Search", type="primary", width="stretch")
 
-        st.divider()
-        st.subheader("Storage")
-        st.caption("Leads are saved automatically so the team can come back later.")
-        st.caption(f"Database: `{settings.sqlite_path.name}`")
-
     if state == STATE_PLACEHOLDER:
         state = ""
 
@@ -933,10 +957,14 @@ def render_sidebar() -> tuple[SearchInput | None, bool]:
 
 
 def render_search_tab(pipeline: LeadPipeline) -> None:
-    search_input, run_search = render_sidebar()
     settings = get_settings()
 
-    st.subheader("Search Results")
+    st.subheader("LeadFinder")
+    st.caption("A search and website-signal tool inside the Vanguard Suite. Results flow into the main Pipeline Sheet.")
+    search_input, run_search = render_leadfinder_controls()
+
+    st.write("")
+    st.markdown("#### Search Results")
     st.caption("Every new search is saved automatically and de-duplicated.")
 
     if run_search:
@@ -975,7 +1003,7 @@ def render_search_tab(pipeline: LeadPipeline) -> None:
         render_note(f"Latest run: {summary}")
 
     if results_df.empty:
-        render_note("Run a search from the left sidebar to load leads, website signals, and outreach openers.")
+        render_note("Run a search above to load leads, website signals, and outreach openers.")
         return
 
     st.write("")
@@ -1071,9 +1099,112 @@ def render_search_tab(pipeline: LeadPipeline) -> None:
     )
 
 
+def render_command_center(pipeline: LeadPipeline, history_df: pd.DataFrame) -> None:
+    st.subheader("Command Center")
+    st.caption("The default view for daily pipeline progress, follow-up pressure, and client movement.")
+
+    if history_df.empty:
+        intro_cols = st.columns([1.4, 1])
+        with intro_cols[0]:
+            render_note(
+                "No records yet. Start in the LeadFinder tool, run a search, then manage every lead from the Pipeline Sheet."
+            )
+        with intro_cols[1]:
+            with st.container(border=True):
+                st.markdown("#### Suite Workflow")
+                st.write("1. Use LeadFinder to find businesses.")
+                st.write("2. Qualify and update leads in Pipeline Sheet.")
+                st.write("3. Work daily callbacks from Follow Ups.")
+                st.write("4. Move won accounts to Client.")
+        return
+
+    active_count = int(history_df["status"].isin(ACTIVE_STATUS_OPTIONS).sum())
+    due_count = count_due_followups(history_df)
+    client_count = int((history_df["status"] == "Client").sum())
+    urgent_count = int(history_df["priority"].isin(["High", "Urgent"]).sum())
+    no_website_count = int((history_df["website"].astype(str).str.strip() == "").sum())
+
+    metric_cols = st.columns(5)
+    with metric_cols[0]:
+        st.metric("Total Records", f"{len(history_df):,}")
+    with metric_cols[1]:
+        st.metric("Active Pipeline", f"{active_count:,}")
+    with metric_cols[2]:
+        st.metric("Due Follow Ups", f"{due_count:,}")
+    with metric_cols[3]:
+        st.metric("High Priority", f"{urgent_count:,}")
+    with metric_cols[4]:
+        st.metric("Clients", f"{client_count:,}")
+
+    st.write("")
+    left, right = st.columns([1.2, 1])
+    with left:
+        st.markdown("#### Pipeline Progress")
+        status_counts = (
+            history_df["status"]
+            .fillna("New")
+            .value_counts()
+            .rename_axis("Status")
+            .reset_index(name="Count")
+        )
+        st.dataframe(status_counts, hide_index=True, width="stretch", height=330)
+
+    with right:
+        st.markdown("#### Attention Needed")
+        attention_rows = [
+            {"Queue": "Follow-ups due", "Count": due_count, "Next Step": "Open Follow Ups"},
+            {"Queue": "High priority leads", "Count": urgent_count, "Next Step": "Filter Pipeline Sheet"},
+            {"Queue": "No website listed", "Count": no_website_count, "Next Step": "Use as redesign angle"},
+            {"Queue": "Won clients", "Count": client_count, "Next Step": "Track delivery progress"},
+        ]
+        st.dataframe(pd.DataFrame(attention_rows), hide_index=True, width="stretch", height=330)
+
+    st.write("")
+    st.markdown("#### Main Progress Sheet Preview")
+    sheet = crm_table(history_df)
+    preview_columns = [
+        "Business Name",
+        "Status",
+        "Priority",
+        "City",
+        "State",
+        "Contact Method",
+        "Last Contacted",
+        "Next Follow Up",
+        "Status Reason",
+        "Notes",
+    ]
+    st.dataframe(
+        sheet[preview_columns].head(20),
+        hide_index=True,
+        width="stretch",
+        height=420,
+    )
+
+    searches = pipeline.database.fetch_saved_searches(limit=5)
+    if not searches.empty:
+        st.write("")
+        st.markdown("#### Recent LeadFinder Searches")
+        search_display = searches.copy()
+        search_display["state"] = search_display["state"].apply(state_name)
+        st.dataframe(
+            search_display.rename(
+                columns={
+                    "category": "Category",
+                    "city": "City",
+                    "state": "State",
+                    "result_count": "Results",
+                    "created_at": "Created At",
+                }
+            )[["Created At", "Category", "City", "State", "Results"]],
+            hide_index=True,
+            width="stretch",
+        )
+
+
 def render_leads_tab(pipeline: LeadPipeline) -> None:
-    st.subheader("Leads")
-    st.caption("Update lead status, priority, follow-up dates, contact details, reasons, and notes.")
+    st.subheader("Pipeline Sheet")
+    st.caption("The main operating sheet for Vanguard's prospect pipeline and client progress.")
     history_df = pipeline.database.fetch_all_leads()
 
     if history_df.empty:
@@ -1341,6 +1472,50 @@ def render_followups_tab(pipeline: LeadPipeline) -> None:
         st.rerun()
 
 
+def render_clients_tab(pipeline: LeadPipeline) -> None:
+    st.subheader("Client Board")
+    st.caption("Won accounts and delivery-facing notes. Mark a lead as Client in the Pipeline Sheet to move it here.")
+    history_df = pipeline.database.fetch_all_leads()
+
+    if history_df.empty:
+        render_note("No records yet. Clients will appear here after leads are saved and marked as Client.")
+        return
+
+    clients = history_df[history_df["status"] == "Client"].copy()
+    if clients.empty:
+        active = history_df[history_df["status"].isin(["Interested", "Follow Up", "Contacted", "Qualified"])].copy()
+        render_note("No clients yet. The table below shows the warmest active opportunities to work next.")
+        if active.empty:
+            return
+        clients = active
+
+    display_df = crm_table(clients)
+    board_columns = [
+        "Business Name",
+        "Category",
+        "City",
+        "State",
+        "Priority",
+        "Owner Name",
+        "Email",
+        "Phone",
+        "Website",
+        "Last Contacted",
+        "Next Follow Up",
+        "Status Reason",
+        "Notes",
+    ]
+    st.dataframe(
+        display_df[board_columns],
+        hide_index=True,
+        width="stretch",
+        height=560,
+        column_config={
+            "Website": st.column_config.LinkColumn("Website", display_text="Open"),
+        },
+    )
+
+
 def render_activity_tab(pipeline: LeadPipeline) -> None:
     st.subheader("Activity")
     st.caption("Recent searches and lead changes across the team.")
@@ -1393,7 +1568,7 @@ def render_activity_tab(pipeline: LeadPipeline) -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="LeadFinder", page_icon="L", layout="wide", initial_sidebar_state="expanded")
+    st.set_page_config(page_title="Vanguard Suite", page_icon="V", layout="wide", initial_sidebar_state="expanded")
     inject_styles()
     init_state()
     if not require_password():
@@ -1403,15 +1578,22 @@ def main() -> None:
     ensure_dashboard_database(pipeline)
     history_df = pipeline.database.fetch_all_leads()
 
+    render_suite_sidebar(history_df)
     render_header(history_df)
 
-    search_tab, leads_tab, followups_tab, activity_tab = st.tabs(["Search", "Leads", "Follow Ups", "Activity"])
-    with search_tab:
-        render_search_tab(pipeline)
+    dashboard_tab, leads_tab, followups_tab, clients_tab, leadfinder_tab, activity_tab = st.tabs(
+        ["Command Center", "Pipeline Sheet", "Follow Ups", "Client Board", "LeadFinder", "Activity"]
+    )
+    with dashboard_tab:
+        render_command_center(pipeline, history_df)
     with leads_tab:
         render_leads_tab(pipeline)
     with followups_tab:
         render_followups_tab(pipeline)
+    with clients_tab:
+        render_clients_tab(pipeline)
+    with leadfinder_tab:
+        render_search_tab(pipeline)
     with activity_tab:
         render_activity_tab(pipeline)
 
