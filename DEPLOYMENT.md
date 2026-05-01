@@ -51,6 +51,7 @@ RAPIDAPI_TIMEOUT_SECONDS = "25"
 OPENAI_API_KEY = "your_openai_key"
 OPENAI_MODEL = "gpt-4o-mini"
 REQUEST_TIMEOUT_SECONDS = "10"
+APP_PASSWORD = "skibidi123"
 ```
 
 ## 4. Share The URL

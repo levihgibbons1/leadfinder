@@ -370,6 +370,7 @@ def get_pipeline() -> LeadPipeline:
 def init_state() -> None:
     st.session_state.setdefault("last_results", pd.DataFrame())
     st.session_state.setdefault("last_run_summary", "")
+    st.session_state.setdefault("authenticated", False)
     st.session_state.setdefault(CATEGORY_KEY, SUGGESTED_CATEGORIES[0])
     st.session_state.setdefault(CUSTOM_CATEGORY_KEY, "")
     st.session_state.setdefault(CITY_KEY, "")
@@ -392,6 +393,25 @@ def state_abbr(value: str) -> str:
 def render_note(message: str) -> None:
     with st.container(border=True):
         st.write(message)
+
+
+def require_password() -> bool:
+    settings = get_settings()
+    if not settings.app_password:
+        return True
+    if st.session_state.get("authenticated", False):
+        return True
+
+    st.title("LeadFinder")
+    st.caption("Enter the team password to continue.")
+    password = st.text_input("Password", type="password")
+    if st.button("Unlock", type="primary"):
+        if password == settings.app_password:
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+    return False
 
 
 def pick_random_market(preferred_state: str = "") -> tuple[str, str]:
@@ -963,6 +983,8 @@ def main() -> None:
     st.set_page_config(page_title="LeadFinder", page_icon="L", layout="wide", initial_sidebar_state="expanded")
     inject_styles()
     init_state()
+    if not require_password():
+        return
 
     pipeline = get_pipeline()
     history_df = pipeline.database.fetch_all_leads()
