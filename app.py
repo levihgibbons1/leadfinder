@@ -404,8 +404,10 @@ def require_password() -> bool:
 
     st.title("LeadFinder")
     st.caption("Enter the team password to continue.")
-    password = st.text_input("Password", type="password")
-    if st.button("Unlock", type="primary"):
+    with st.form("password_gate"):
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Unlock", type="primary")
+    if submitted:
         if password == settings.app_password:
             st.session_state["authenticated"] = True
             st.rerun()
