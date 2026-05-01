@@ -367,6 +367,21 @@ def get_pipeline() -> LeadPipeline:
     )
 
 
+def ensure_dashboard_database(pipeline: LeadPipeline) -> None:
+    required_methods = (
+        "update_lead_management",
+        "fetch_lead_events",
+        "fetch_saved_searches",
+        "record_saved_search",
+    )
+    if all(hasattr(pipeline.database, method_name) for method_name in required_methods):
+        return
+
+    st.cache_resource.clear()
+    st.warning("LeadFinder refreshed its database connection. Reloading the dashboard...")
+    st.rerun()
+
+
 def init_state() -> None:
     st.session_state.setdefault("last_results", pd.DataFrame())
     st.session_state.setdefault("last_run_summary", "")
@@ -989,6 +1004,7 @@ def main() -> None:
         return
 
     pipeline = get_pipeline()
+    ensure_dashboard_database(pipeline)
     history_df = pipeline.database.fetch_all_leads()
 
     render_header(history_df)
