@@ -2,6 +2,8 @@
 
 LeadFinder is a Streamlit app for finding under-served blue-collar businesses in smaller towns, analyzing their websites for strong redesign signals, and saving the results for follow-up.
 
+It now includes a simple team CRM dashboard for managing lead status, priority, follow-up dates, contact details, notes, activity history, and saved search history.
+
 ## Stack
 
 - Python + Streamlit
@@ -50,10 +52,12 @@ LeadFinder is a Streamlit app for finding under-served blue-collar businesses in
 
 ## Notes
 
-- New leads are upserted into `data/leads.db`.
+- New leads are upserted into `data/leads.db` locally or Supabase Postgres in production.
 - The Excel workbook is kept at `data/leads.xlsx`.
 - Duplicate protection uses a hash of business name, phone, website, and location.
 - If `OPENAI_API_KEY` is missing, the app falls back to rule-based signals and openers.
+- Lead management fields include status, priority, contact method, email, owner/contact name, last contacted date, next follow-up date, status reason, and notes.
+- Lead update activity and saved searches are stored in separate database tables.
 
 ## Hosted Database
 

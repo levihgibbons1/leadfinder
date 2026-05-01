@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import random
+from datetime import date
 
 import pandas as pd
 import streamlit as st
@@ -84,7 +85,23 @@ STATE_ABBR_TO_NAME = {abbr: name for name, abbr in STATE_NAME_TO_ABBR.items()}
 STATE_OPTIONS = list(STATE_NAME_TO_ABBR.keys())
 STATE_PLACEHOLDER = "Select a state"
 
-STATUS_OPTIONS = ["All", "New", "Contacted", "Client", "Dead"]
+LEAD_STATUS_OPTIONS = [
+    "New",
+    "Qualified",
+    "Pending",
+    "Contacted",
+    "Follow Up",
+    "Interested",
+    "Client",
+    "Not Fit",
+    "No Response",
+    "Failed",
+    "Dead",
+]
+STATUS_FILTER_OPTIONS = ["All", *LEAD_STATUS_OPTIONS]
+ACTIVE_STATUS_OPTIONS = {"New", "Qualified", "Pending", "Contacted", "Follow Up", "Interested", "No Response"}
+PRIORITY_OPTIONS = ["Low", "Medium", "High", "Urgent"]
+CONTACT_METHOD_OPTIONS = ["", "Email", "Call", "Text", "Website Form", "In Person"]
 WEBSITE_FILTER_OPTIONS = ["Any", "Has website", "No website"]
 OPPORTUNITY_FILTER_OPTIONS = ["Any", "Hot", "Warm", "Low"]
 SIGNAL_FILTER_OPTIONS = [
@@ -344,6 +361,37 @@ def inject_styles() -> None:
             color: #111111;
             font-size: 0.9rem;
             line-height: 1.35;
+        }
+
+        .crm-card {
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 0.75rem;
+            padding: 1rem;
+        }
+
+        .crm-card-title {
+            color: #111111;
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+        }
+
+        .crm-muted {
+            color: #4b5563;
+            font-size: 0.92rem;
+            line-height: 1.45;
+        }
+
+        .status-chip {
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            color: #111111;
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            margin: 0 0.35rem 0.35rem 0;
+            padding: 0.18rem 0.55rem;
         }
         </style>
         """,
@@ -652,25 +700,142 @@ def filter_results(
     return filtered.reset_index(drop=True)
 
 
-def filter_history(df: pd.DataFrame, keyword: str, status: str) -> pd.DataFrame:
+def filter_history(
+    df: pd.DataFrame,
+    keyword: str,
+    status: str,
+    priority: str,
+    state: str,
+    website_filter: str,
+    due_only: bool,
+) -> pd.DataFrame:
     filtered = df.copy()
     if status != "All":
         filtered = filtered[filtered["status"] == status]
+    if priority != "All":
+        filtered = filtered[filtered["priority"] == priority]
+    if state != "All":
+        filtered = filtered[filtered["state"].apply(state_name) == state]
+    if website_filter == "Has website":
+        filtered = filtered[filtered["website"].astype(str).str.strip() != ""]
+    elif website_filter == "No website":
+        filtered = filtered[filtered["website"].astype(str).str.strip() == ""]
+    if due_only:
+        due_dates = parse_date_series(filtered["next_follow_up_at"])
+        filtered = filtered[due_dates.notna() & (due_dates <= pd.Timestamp(date.today()))]
     if keyword.strip():
         haystack = filtered.astype(str).agg(" ".join, axis=1).str.lower()
         filtered = filtered[haystack.str.contains(keyword.strip().lower(), na=False)]
     return filtered.reset_index(drop=True)
 
 
+def parse_date_series(series: pd.Series) -> pd.Series:
+    return pd.to_datetime(series.replace("", pd.NA), errors="coerce")
+
+
+def count_due_followups(df: pd.DataFrame) -> int:
+    if df.empty or "next_follow_up_at" not in df.columns:
+        return 0
+    due_dates = parse_date_series(df["next_follow_up_at"])
+    return int((due_dates.notna() & (due_dates <= pd.Timestamp(date.today()))).sum())
+
+
+def list_text(value: object) -> str:
+    if isinstance(value, list):
+        return "\n".join(str(item) for item in value if str(item).strip())
+    return str(value or "")
+
+
+def display_date(value: object) -> str:
+    if value is None or pd.isna(value) or str(value).strip() == "":
+        return "-"
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return str(value)
+    return parsed.date().isoformat()
+
+
+def format_event_value(value: object) -> str:
+    text = str(value or "").strip()
+    return text if text else "blank"
+
+
+def crm_table(history_df: pd.DataFrame) -> pd.DataFrame:
+    table = history_df.copy()
+    table["State"] = table["state"].apply(state_name)
+    table["Website Status"] = table["website"].astype(str).str.strip().apply(
+        lambda value: "Has website" if value else "No website"
+    )
+    table["Signals"] = table["key_signals"].apply(list_text)
+    table["Openers"] = table["personalized_openers"].apply(list_text)
+    return table.rename(
+        columns={
+            "id": "Lead ID",
+            "business_name": "Business Name",
+            "category": "Category",
+            "city": "City",
+            "location": "Location",
+            "phone": "Phone",
+            "website": "Website",
+            "rating": "Rating",
+            "reviews": "Reviews",
+            "status": "Status",
+            "priority": "Priority",
+            "contact_method": "Contact Method",
+            "email": "Email",
+            "owner_name": "Owner Name",
+            "last_contacted_at": "Last Contacted",
+            "next_follow_up_at": "Next Follow Up",
+            "status_reason": "Status Reason",
+            "notes": "Notes",
+            "created_at": "Created At",
+            "updated_at": "Updated At",
+            "last_seen_at": "Last Seen",
+        }
+    )
+
+
+def management_update_frame(edited: pd.DataFrame) -> pd.DataFrame:
+    updates = edited.rename(
+        columns={
+            "Lead ID": "id",
+            "Status": "status",
+            "Priority": "priority",
+            "Contact Method": "contact_method",
+            "Email": "email",
+            "Owner Name": "owner_name",
+            "Last Contacted": "last_contacted_at",
+            "Next Follow Up": "next_follow_up_at",
+            "Status Reason": "status_reason",
+            "Notes": "notes",
+        }
+    )
+    return updates[
+        [
+            "id",
+            "status",
+            "priority",
+            "contact_method",
+            "email",
+            "owner_name",
+            "last_contacted_at",
+            "next_follow_up_at",
+            "status_reason",
+            "notes",
+        ]
+    ]
+
+
 def render_header(history_df: pd.DataFrame) -> None:
     total = len(history_df)
-    new_count = int((history_df["status"] == "New").sum()) if not history_df.empty else 0
+    active_count = int(history_df["status"].isin(ACTIVE_STATUS_OPTIONS).sum()) if not history_df.empty else 0
+    due_count = count_due_followups(history_df)
     client_count = int((history_df["status"] == "Client").sum()) if not history_df.empty else 0
     states = int(history_df["state"].nunique()) if not history_df.empty else 0
 
     st.title("LeadFinder")
     st.markdown(
-        '<div class="helper-text">Search smaller-town blue-collar businesses, flag weak websites, and keep all leads in one place.</div>',
+        '<div class="helper-text">Team dashboard for finding, tracking, and following up with smaller-town blue-collar leads.</div>',
         unsafe_allow_html=True,
     )
     st.write("")
@@ -679,11 +844,11 @@ def render_header(history_df: pd.DataFrame) -> None:
     with metric_cols[0]:
         st.metric("Total Leads", f"{total:,}")
     with metric_cols[1]:
-        st.metric("New Leads", f"{new_count:,}")
+        st.metric("Active Leads", f"{active_count:,}")
     with metric_cols[2]:
-        st.metric("Clients", f"{client_count:,}")
+        st.metric("Follow Ups Due", f"{due_count:,}")
     with metric_cols[3]:
-        st.metric("States Covered", f"{states:,}")
+        st.metric("Clients", f"{client_count:,}", help=f"{states:,} states covered")
 
 
 def render_sidebar() -> tuple[SearchInput | None, bool]:
@@ -906,61 +1071,86 @@ def render_search_tab(pipeline: LeadPipeline) -> None:
     )
 
 
-def render_history_tab(pipeline: LeadPipeline) -> None:
-    st.subheader("All Leads")
-    st.caption("This is the full saved history. Update status and notes here as your team works each lead.")
+def render_leads_tab(pipeline: LeadPipeline) -> None:
+    st.subheader("Leads")
+    st.caption("Update lead status, priority, follow-up dates, contact details, reasons, and notes.")
     history_df = pipeline.database.fetch_all_leads()
 
     if history_df.empty:
-        render_note("No saved leads yet. Once you run a search, the full history will appear here.")
+        render_note("No saved leads yet. Run a search first, then manage the full pipeline here.")
         return
 
-    filters = st.columns([2, 1])
-    with filters[0]:
+    state_options = ["All", *sorted(history_df["state"].dropna().apply(state_name).unique())]
+    filter_cols = st.columns([2.2, 0.9, 0.9, 0.9, 0.8])
+    with filter_cols[0]:
         keyword = st.text_input(
-            "Search saved leads",
-            key="history_filter",
-            placeholder="Search business name, notes, location, category, or signals",
+            "Search leads",
+            key="lead_filter",
+            placeholder="Business, city, phone, signals, opener, notes, or status reason",
         )
-    with filters[1]:
-        status = st.selectbox("Status", STATUS_OPTIONS, index=0, key="history_status")
+    with filter_cols[1]:
+        status = st.selectbox("Status", STATUS_FILTER_OPTIONS, index=0, key="lead_status_filter")
+    with filter_cols[2]:
+        priority = st.selectbox("Priority", ["All", *PRIORITY_OPTIONS], index=0, key="lead_priority_filter")
+    with filter_cols[3]:
+        selected_state = st.selectbox("State", state_options, index=0, key="lead_state_filter")
+    with filter_cols[4]:
+        website_filter = st.selectbox("Website", WEBSITE_FILTER_OPTIONS, index=0, key="lead_website_filter")
 
-    filtered = filter_history(history_df, keyword, status)
-    editable = filtered[
-        [
-            "id",
-            "business_name",
-            "category",
-            "city",
-            "state",
-            "phone",
-            "website",
-            "rating",
-            "reviews",
-            "status",
-            "notes",
-            "created_at",
-        ]
-    ].rename(
-        columns={
-            "id": "Lead ID",
-            "business_name": "Business Name",
-            "category": "Category",
-            "city": "City",
-            "state": "State",
-            "phone": "Phone",
-            "website": "Website",
-            "rating": "Rating",
-            "reviews": "Reviews",
-            "status": "Status",
-            "notes": "Notes",
-            "created_at": "Created At",
-        }
+    due_only = st.checkbox("Show only follow-ups due today or earlier", key="lead_due_filter")
+    filtered = filter_history(history_df, keyword, status, priority, selected_state, website_filter, due_only)
+
+    metric_cols = st.columns(4)
+    with metric_cols[0]:
+        st.metric("Visible Leads", f"{len(filtered):,}")
+    with metric_cols[1]:
+        st.metric("High Priority", f"{int(filtered['priority'].isin(['High', 'Urgent']).sum()):,}" if not filtered.empty else "0")
+    with metric_cols[2]:
+        st.metric("Follow Ups Due", f"{count_due_followups(filtered):,}")
+    with metric_cols[3]:
+        st.metric("No Website", f"{int((filtered['website'].astype(str).str.strip() == '').sum()):,}" if not filtered.empty else "0")
+
+    if filtered.empty:
+        render_note("No leads match the current filters.")
+        return
+
+    display_df = crm_table(filtered)
+    editable_columns = [
+        "Lead ID",
+        "Business Name",
+        "Category",
+        "City",
+        "State",
+        "Phone",
+        "Website",
+        "Website Status",
+        "Rating",
+        "Reviews",
+        "Status",
+        "Priority",
+        "Contact Method",
+        "Email",
+        "Owner Name",
+        "Last Contacted",
+        "Next Follow Up",
+        "Status Reason",
+        "Notes",
+        "Created At",
+    ]
+    editable = display_df[editable_columns].copy()
+    editable["Status"] = editable["Status"].where(editable["Status"].isin(LEAD_STATUS_OPTIONS), "New")
+    editable["Priority"] = editable["Priority"].where(editable["Priority"].isin(PRIORITY_OPTIONS), "Medium")
+    editable["Contact Method"] = editable["Contact Method"].where(
+        editable["Contact Method"].isin(CONTACT_METHOD_OPTIONS),
+        "",
     )
+    editable["Last Contacted"] = pd.to_datetime(editable["Last Contacted"].replace("", pd.NA), errors="coerce")
+    editable["Next Follow Up"] = pd.to_datetime(editable["Next Follow Up"].replace("", pd.NA), errors="coerce")
 
+    st.write("")
     edited = st.data_editor(
         editable,
-        height=620,
+        height=560,
         hide_index=True,
         width="stretch",
         disabled=[
@@ -971,29 +1161,235 @@ def render_history_tab(pipeline: LeadPipeline) -> None:
             "State",
             "Phone",
             "Website",
+            "Website Status",
             "Rating",
             "Reviews",
             "Created At",
         ],
         column_config={
-            "Website": st.column_config.LinkColumn("Website", display_text="Open site"),
-            "Status": st.column_config.SelectboxColumn("Status", options=STATUS_OPTIONS[1:]),
+            "Website": st.column_config.LinkColumn("Website", display_text="Open"),
+            "Status": st.column_config.SelectboxColumn("Status", options=LEAD_STATUS_OPTIONS, required=True),
+            "Priority": st.column_config.SelectboxColumn("Priority", options=PRIORITY_OPTIONS, required=True),
+            "Contact Method": st.column_config.SelectboxColumn("Contact Method", options=CONTACT_METHOD_OPTIONS),
+            "Last Contacted": st.column_config.DateColumn("Last Contacted", format="YYYY-MM-DD"),
+            "Next Follow Up": st.column_config.DateColumn("Next Follow Up", format="YYYY-MM-DD"),
+            "Rating": st.column_config.NumberColumn("Rating", format="%.1f"),
+            "Reviews": st.column_config.NumberColumn("Reviews", format="%d"),
         },
-        key="history_editor",
+        key="lead_management_editor",
     )
 
-    footer = st.columns([1, 1.2, 4])
-    with footer[0]:
-        st.metric("Visible Rows", len(filtered))
-    with footer[1]:
-        if st.button("Save Status + Notes", width="stretch"):
-            update_df = edited.rename(
-                columns={"Lead ID": "id", "Status": "status", "Notes": "notes"}
-            )[["id", "status", "notes"]]
-            pipeline.database.update_status_notes(update_df)
-            st.success("Lead status and notes saved.")
+    save_cols = st.columns([1.1, 4])
+    with save_cols[0]:
+        if st.button("Save Lead Updates", type="primary", width="stretch"):
+            pipeline.database.update_lead_management(management_update_frame(edited))
+            st.success("Lead updates saved.")
             st.cache_resource.clear()
             st.rerun()
+
+    st.write("")
+    render_lead_detail(filtered, pipeline)
+
+
+def render_lead_detail(filtered: pd.DataFrame, pipeline: LeadPipeline) -> None:
+    st.markdown("#### Lead Detail")
+    options = {
+        f"{row.business_name} · {row.city}, {state_name(row.state)} · #{row.id}": int(row.id)
+        for row in filtered.itertuples()
+    }
+    selected_label = st.selectbox("Open a lead", list(options.keys()), key="lead_detail_select")
+    selected_id = options[selected_label]
+    lead = filtered[filtered["id"] == selected_id].iloc[0]
+
+    left, right = st.columns([1.1, 1])
+    with left:
+        st.markdown(
+            f"""
+            <div class="crm-card">
+                <div class="crm-card-title">{html.escape(str(lead["business_name"]))}</div>
+                <div class="crm-muted">{html.escape(str(lead["location"] or f'{lead["city"]}, {state_name(lead["state"])}'))}</div>
+                <br>
+                <span class="status-chip">{html.escape(str(lead["status"]))}</span>
+                <span class="status-chip">{html.escape(str(lead["priority"]))} priority</span>
+                <span class="status-chip">{html.escape(str(lead["reviews"] if pd.notna(lead["reviews"]) else 0))} reviews</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        details = {
+            "Phone": lead["phone"] or "-",
+            "Website": lead["website"] or "-",
+            "Email": lead["email"] or "-",
+            "Owner / Contact Name": lead["owner_name"] or "-",
+            "Contact Method": lead["contact_method"] or "-",
+            "Last Contacted": display_date(lead["last_contacted_at"]),
+            "Next Follow Up": display_date(lead["next_follow_up_at"]),
+            "Status Reason": lead["status_reason"] or "-",
+            "Notes": lead["notes"] or "-",
+        }
+        st.dataframe(pd.DataFrame(details.items(), columns=["Field", "Value"]), hide_index=True, width="stretch")
+
+    with right:
+        st.markdown("**Signals**")
+        signals = lead["key_signals"] if isinstance(lead["key_signals"], list) else []
+        if signals:
+            for signal in signals:
+                st.write(f"- {signal}")
+        else:
+            st.caption("No saved signals for this lead.")
+
+        st.markdown("**Openers**")
+        openers = lead["personalized_openers"] if isinstance(lead["personalized_openers"], list) else []
+        if openers:
+            for opener in openers:
+                st.write(f"- {opener}")
+        else:
+            st.caption("No saved openers for this lead.")
+
+    events = pipeline.database.fetch_lead_events(limit=300)
+    lead_events = events[events["lead_id"] == selected_id] if not events.empty else pd.DataFrame()
+    if not lead_events.empty:
+        st.markdown("**Recent Activity For This Lead**")
+        event_display = lead_events[["created_at", "field_name", "old_value", "new_value"]].copy()
+        event_display["Change"] = event_display.apply(
+            lambda row: f"{row['field_name']}: {format_event_value(row['old_value'])} -> {format_event_value(row['new_value'])}",
+            axis=1,
+        )
+        st.dataframe(event_display[["created_at", "Change"]], hide_index=True, width="stretch", height=220)
+
+
+def render_followups_tab(pipeline: LeadPipeline) -> None:
+    st.subheader("Follow Ups")
+    st.caption("A focused worklist for leads that need attention.")
+    history_df = pipeline.database.fetch_all_leads()
+
+    if history_df.empty:
+        render_note("No leads yet. Follow-ups will appear here after searches and lead updates.")
+        return
+
+    due_dates = parse_date_series(history_df["next_follow_up_at"])
+    today = date.today()
+    mode = st.radio(
+        "View",
+        ["Due now", "All scheduled", "Needs a follow-up date"],
+        horizontal=True,
+        key="followup_mode",
+    )
+
+    if mode == "Due now":
+        filtered = history_df[due_dates.notna() & (due_dates <= pd.Timestamp(today))].copy()
+    elif mode == "All scheduled":
+        filtered = history_df[due_dates.notna()].copy()
+    else:
+        filtered = history_df[
+            history_df["status"].isin(ACTIVE_STATUS_OPTIONS) & (due_dates.isna())
+        ].copy()
+
+    if filtered.empty:
+        render_note("Nothing in this follow-up view right now.")
+        return
+
+    filtered = filtered.sort_values(
+        by=["next_follow_up_at", "priority", "business_name"],
+        ascending=[True, False, True],
+        na_position="last",
+    )
+    display_df = crm_table(filtered)
+    followup_columns = [
+        "Lead ID",
+        "Business Name",
+        "City",
+        "State",
+        "Status",
+        "Priority",
+        "Contact Method",
+        "Phone",
+        "Website",
+        "Last Contacted",
+        "Next Follow Up",
+        "Status Reason",
+        "Notes",
+    ]
+    editable = display_df[followup_columns].copy()
+    editable["Last Contacted"] = pd.to_datetime(editable["Last Contacted"].replace("", pd.NA), errors="coerce")
+    editable["Next Follow Up"] = pd.to_datetime(editable["Next Follow Up"].replace("", pd.NA), errors="coerce")
+
+    edited = st.data_editor(
+        editable,
+        height=620,
+        hide_index=True,
+        width="stretch",
+        disabled=["Lead ID", "Business Name", "City", "State", "Phone", "Website"],
+        column_config={
+            "Website": st.column_config.LinkColumn("Website", display_text="Open"),
+            "Status": st.column_config.SelectboxColumn("Status", options=LEAD_STATUS_OPTIONS, required=True),
+            "Priority": st.column_config.SelectboxColumn("Priority", options=PRIORITY_OPTIONS, required=True),
+            "Contact Method": st.column_config.SelectboxColumn("Contact Method", options=CONTACT_METHOD_OPTIONS),
+            "Last Contacted": st.column_config.DateColumn("Last Contacted", format="YYYY-MM-DD"),
+            "Next Follow Up": st.column_config.DateColumn("Next Follow Up", format="YYYY-MM-DD"),
+        },
+        key="followup_editor",
+    )
+
+    if st.button("Save Follow Up Updates", type="primary", width="stretch"):
+        existing = crm_table(filtered)
+        for column in ["Email", "Owner Name"]:
+            edited[column] = existing[column].values
+        pipeline.database.update_lead_management(management_update_frame(edited))
+        st.success("Follow-up updates saved.")
+        st.cache_resource.clear()
+        st.rerun()
+
+
+def render_activity_tab(pipeline: LeadPipeline) -> None:
+    st.subheader("Activity")
+    st.caption("Recent searches and lead changes across the team.")
+    events = pipeline.database.fetch_lead_events(limit=200)
+    searches = pipeline.database.fetch_saved_searches(limit=100)
+
+    st.markdown("#### Saved Searches")
+    if searches.empty:
+        render_note("No saved searches yet.")
+    else:
+        search_display = searches.copy()
+        search_display["state"] = search_display["state"].apply(state_name)
+        st.dataframe(
+            search_display.rename(
+                columns={
+                    "category": "Category",
+                    "city": "City",
+                    "state": "State",
+                    "limit_count": "Limit",
+                    "result_count": "Results",
+                    "created_at": "Created At",
+                }
+            )[["Created At", "Category", "City", "State", "Limit", "Results"]],
+            hide_index=True,
+            width="stretch",
+            height=320,
+        )
+
+    st.markdown("#### Lead Updates")
+    if events.empty:
+        render_note("No lead updates have been saved yet.")
+    else:
+        event_display = events.copy()
+        event_display["Change"] = event_display.apply(
+            lambda row: f"{row['field_name']}: {format_event_value(row['old_value'])} -> {format_event_value(row['new_value'])}",
+            axis=1,
+        )
+        st.dataframe(
+            event_display.rename(
+                columns={
+                    "created_at": "Created At",
+                    "business_name": "Business Name",
+                    "event_type": "Type",
+                }
+            )[["Created At", "Business Name", "Type", "Change"]],
+            hide_index=True,
+            width="stretch",
+            height=420,
+        )
 
 
 def main() -> None:
@@ -1009,11 +1405,15 @@ def main() -> None:
 
     render_header(history_df)
 
-    search_tab, history_tab = st.tabs(["Search", "All Leads"])
+    search_tab, leads_tab, followups_tab, activity_tab = st.tabs(["Search", "Leads", "Follow Ups", "Activity"])
     with search_tab:
         render_search_tab(pipeline)
-    with history_tab:
-        render_history_tab(pipeline)
+    with leads_tab:
+        render_leads_tab(pipeline)
+    with followups_tab:
+        render_followups_tab(pipeline)
+    with activity_tab:
+        render_activity_tab(pipeline)
 
 
 if __name__ == "__main__":
