@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-import streamlit as st
+try:
+    import streamlit as _st
+except ModuleNotFoundError:
+    _st = None  # type: ignore[assignment]
 from dotenv import load_dotenv
 
 
@@ -20,7 +23,7 @@ def get_secret(name: str, default: str = "") -> str:
     if value not in (None, ""):
         return value
     try:
-        return str(st.secrets.get(name, default))
+        return str(_st.secrets.get(name, default)) if _st else default
     except Exception:  # noqa: BLE001
         return default
 
