@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { Search, Zap, Globe, Phone, Star, AlertCircle, Shuffle } from 'lucide-react'
+import { useState, useRef, useMemo } from 'react'
+import { Search, Zap, Globe, Phone, Star, AlertCircle, Shuffle, Filter } from 'lucide-react'
 
 interface LeadResult {
   business_name: string
@@ -86,6 +86,20 @@ export default function LeadFinderPage() {
   const [expanded, setExpanded] = useState<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
+  // Filters
+  const [filterHasWebsite, setFilterHasWebsite] = useState(false)
+  const [filterHasPhone, setFilterHasPhone] = useState(false)
+  const [filterMinRating, setFilterMinRating] = useState(0)
+
+  const filteredResults = useMemo(() => {
+    return results.filter(lead => {
+      if (filterHasWebsite && !lead.website) return false
+      if (filterHasPhone && !lead.phone) return false
+      if (filterMinRating > 0 && lead.rating !== null && lead.rating < filterMinRating) return false
+      return true
+    })
+  }, [results, filterHasWebsite, filterHasPhone, filterMinRating])
+
   function randomize() {
     const [randCity, randStateAbbr] = SMALL_TOWN_MARKETS[Math.floor(Math.random() * SMALL_TOWN_MARKETS.length)]
     const randCategory = SUGGESTED_CATEGORIES[Math.floor(Math.random() * SUGGESTED_CATEGORIES.length)]
@@ -106,6 +120,9 @@ export default function LeadFinderPage() {
     setResults([])
     setError('')
     setExpanded(null)
+    setFilterHasWebsite(false)
+    setFilterHasPhone(false)
+    setFilterMinRating(0)
 
     abortRef.current = new AbortController()
 
@@ -216,7 +233,7 @@ export default function LeadFinderPage() {
             />
           </div>
 
-          {/* State — full names */}
+          {/* State */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
             <select
@@ -305,8 +322,54 @@ export default function LeadFinderPage() {
       {/* Results */}
       {results.length > 0 && (
         <div className="space-y-3">
-          <p className="text-sm font-medium text-gray-700">{results.length} leads found — all saved to your Leads page</p>
-          {results.map((lead, i) => (
+          {/* Filter bar */}
+          <div className="flex items-center gap-3 flex-wrap bg-white border border-gray-200 rounded-xl px-4 py-3">
+            <Filter size={13} className="text-gray-400 flex-shrink-0" />
+            <span className="text-xs font-medium text-gray-500">Filter:</span>
+
+            <button
+              onClick={() => setFilterHasWebsite(v => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                filterHasWebsite
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Globe size={11} /> Has Website
+            </button>
+
+            <button
+              onClick={() => setFilterHasPhone(v => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                filterHasPhone
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Phone size={11} /> Has Phone
+            </button>
+
+            <div className="flex items-center gap-2">
+              <Star size={11} className="text-yellow-400 flex-shrink-0" />
+              <span className="text-xs text-gray-500 whitespace-nowrap">Min rating:</span>
+              <input
+                type="range"
+                min={0}
+                max={5}
+                step={0.5}
+                value={filterMinRating}
+                onChange={e => setFilterMinRating(Number(e.target.value))}
+                className="w-24 accent-blue-600"
+              />
+              <span className="text-xs font-medium text-gray-700 w-6">{filterMinRating > 0 ? filterMinRating : 'Any'}</span>
+            </div>
+
+            <span className="ml-auto text-xs text-gray-400">
+              {filteredResults.length} of {results.length} shown
+            </span>
+          </div>
+
+          {filteredResults.map((lead, i) => (
             <div key={i} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <button
                 className="w-full text-left px-5 py-4 hover:bg-gray-50/60 transition-colors"
@@ -388,6 +451,10 @@ export default function LeadFinderPage() {
               )}
             </div>
           ))}
+
+          {filteredResults.length === 0 && (
+            <div className="text-center py-10 text-sm text-gray-400">No leads match the current filters.</div>
+          )}
         </div>
       )}
     </div>
