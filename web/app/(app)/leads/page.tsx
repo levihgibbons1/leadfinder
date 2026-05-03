@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lead } from '@/lib/types'
-import { Plus, Search, ChevronRight, X, CheckCircle, Filter, Table, LayoutList } from 'lucide-react'
+import { Plus, Search, ChevronRight, X, CheckCircle, Table, LayoutList, Pencil, Globe, ExternalLink } from 'lucide-react'
 
 const STATUSES = ['New', 'Contacted', 'Interested', 'Proposal Sent', 'Won', 'Lost', 'On Hold']
 const PRIORITIES = ['Low', 'Medium', 'High']
@@ -51,6 +51,7 @@ export default function LeadsPage() {
   const [modal, setModal] = useState<Partial<Lead> | null>(null)
   const [saving, setSaving] = useState(false)
   const [converting, setConverting] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
 
   // Extra filters
   const [filterPriority, setFilterPriority] = useState('All')
@@ -125,6 +126,7 @@ export default function LeadsPage() {
     }
     setSaving(false)
     setModal(null)
+    setIsEditing(false)
     load()
   }
 
@@ -184,7 +186,7 @@ export default function LeadsPage() {
             {viewMode === 'excel' ? 'Card View' : 'Excel View'}
           </button>
           <button
-            onClick={() => setModal(blank())}
+            onClick={() => { setModal(blank()); setIsEditing(true) }}
             className="flex items-center gap-1.5 bg-blue-600 text-white px-3.5 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
           >
             <Plus size={15} /> Add Lead
@@ -292,12 +294,16 @@ export default function LeadsPage() {
                 return (
                   <tr
                     key={lead.id}
-                    onClick={() => setModal({ ...lead })}
+                    onClick={() => { setModal({ ...lead }); setIsEditing(false) }}
                     className="border-b border-gray-50 hover:bg-gray-50/80 cursor-pointer transition-colors"
                   >
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{lead.business_name}</div>
                       {lead.owner_name && <div className="text-xs text-gray-400">{lead.owner_name}</div>}
+                      {lead.website
+                        ? <a href={lead.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline mt-0.5"><Globe size={10} />{lead.website.replace(/^https?:\/\//, '').split('/')[0]}</a>
+                        : <span className="text-xs text-gray-300">No website</span>
+                      }
                     </td>
                     <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{lead.category || '—'}</td>
                     <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">
@@ -353,7 +359,7 @@ export default function LeadsPage() {
                 return (
                   <tr
                     key={lead.id}
-                    onClick={() => setModal({ ...lead })}
+                    onClick={() => { setModal({ ...lead }); setIsEditing(false) }}
                     className={`border-b border-gray-100 cursor-pointer hover:bg-blue-50/40 transition-colors ${i % 2 === 0 ? '' : 'bg-gray-50/40'}`}
                   >
                     <td className="px-3 py-1.5 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">{lead.business_name}</td>
@@ -403,7 +409,7 @@ export default function LeadsPage() {
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) { setModal(null); setIsEditing(false) } }}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-base font-semibold text-gray-900">
@@ -425,81 +431,136 @@ export default function LeadsPage() {
                     <CheckCircle size={13} /> Converted to client
                   </span>
                 )}
-                <button onClick={() => setModal(null)} className="p1.5 hover:bg-gray-100 rounded-lg text-gray-400">
+                {modal.id && !isEditing && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+                    title="Edit lead"
+                  >
+                    <Pencil size={13} /> Edit
+                  </button>
+                )}
+                <button onClick={() => { setModal(null); setIsEditing(false) }} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400">
                   <X size={17} />
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <Field label="Business Name *">
-                    <input value={modal.business_name || ''} onChange={e => set('business_name', e.target.value)} placeholder="Joe's Plumbing" className={INPUT} />
-                  </Field>
-                </div>
-                <Field label="Category">
-                  <input value={modal.category || ''} onChange={e => set('category', e.target.value)} placeholder="Plumber, Restaurant..." className={INPUT} />
-                </Field>
-                <Field label="Owner Name">
-                  <input value={modal.owner_name || ''} onChange={e => set('owner_name', e.target.value)} placeholder="Joe Smith" className={INPUT} />
-                </Field>
-                <Field label="City">
-                  <input value={modal.city || ''} onChange={e => set('city', e.target.value)} placeholder="Austin" className={INPUT} />
-                </Field>
-                <Field label="State">
-                  <input value={modal.state || ''} onChange={e => set('state', e.target.value)} placeholder="TX" className={INPUT} />
-                </Field>
-                <Field label="Phone">
-                  <input type="tel" value={modal.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="(512) 555-0100" className={INPUT} />
-                </Field>
-                <Field label="Email">
-                  <input type="email" value={modal.email || ''} onChange={e => set('email', e.target.value)} placeholder="joe@example.com" className={INPUT} />
-                </Field>
-                <div className="col-span-2">
-                  <Field label="Website">
-                    <input value={modal.website || ''} onChange={e => set('website', e.target.value)} placeholder="https://example.com" className={INPUT} />
-                  </Field>
-                </div>
-                <Field label="Status">
-                  <select value={modal.status || 'New'} onChange={e => set('status', e.target.value)} className={SELECT}>
-                    {STATUSES.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </Field>
-                <Field label="Priority">
-                  <select value={modal.priority || 'Medium'} onChange={e => set('priority', e.target.value)} className={SELECT}>
-                    {PRIORITIES.map(p => <option key={p}>{p}</option>)}
-                  </select>
-                </Field>
-                <div className="col-span-2">
-                  <Field label="Next Follow-up Date">
-                    <input type="date" value={modal.next_follow_up_at?.split('T')[0] || ''} onChange={e => set('next_follow_up_at', e.target.value)} className={INPUT} />
-                  </Field>
-                </div>
-                <div className="col-span-2">
-                  <Field label="Notes">
-                    <textarea
-                      value={modal.notes || ''}
-                      onChange={e => set('notes', e.target.value)}
-                      rows={3}
-                      placeholder="Any notes about this lead..."
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                    />
-                  </Field>
+            {/* Read-only view */}
+            {modal.id && !isEditing ? (
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                  <ReadField label="Category" value={modal.category} />
+                  <ReadField label="Owner" value={modal.owner_name} />
+                  <ReadField label="City" value={modal.city} />
+                  <ReadField label="State" value={modal.state} />
+                  <ReadField label="Phone" value={modal.phone} />
+                  <ReadField label="Email" value={modal.email} />
+                  <div className="col-span-2">
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">Website</p>
+                    {modal.website
+                      ? <a href={modal.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline text-sm"><ExternalLink size={13} />{modal.website}</a>
+                      : <span className="text-gray-400 text-sm italic">No website</span>
+                    }
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Status</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[modal.status || ''] || 'bg-gray-100 text-gray-600'}`}>{modal.status || '—'}</span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Priority</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[modal.priority || ''] || 'bg-gray-100 text-gray-600'}`}>{modal.priority || '—'}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <ReadField label="Next Follow-up" value={modal.next_follow_up_at ? new Date(modal.next_follow_up_at).toLocaleDateString() : undefined} />
+                  </div>
+                  {modal.notes && (
+                    <div className="col-span-2">
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Notes</p>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{modal.notes}</p>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
+            ) : (
+              /* Edit / Add form */
+              <div className="flex-1 overflow-y-auto px-6 py-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <Field label="Business Name *">
+                      <input value={modal.business_name || ''} onChange={e => set('business_name', e.target.value)} placeholder="Joe's Plumbing" className={INPUT} />
+                    </Field>
+                  </div>
+                  <Field label="Category">
+                    <input value={modal.category || ''} onChange={e => set('category', e.target.value)} placeholder="Plumber, Restaurant..." className={INPUT} />
+                  </Field>
+                  <Field label="Owner Name">
+                    <input value={modal.owner_name || ''} onChange={e => set('owner_name', e.target.value)} placeholder="Joe Smith" className={INPUT} />
+                  </Field>
+                  <Field label="City">
+                    <input value={modal.city || ''} onChange={e => set('city', e.target.value)} placeholder="Austin" className={INPUT} />
+                  </Field>
+                  <Field label="State">
+                    <input value={modal.state || ''} onChange={e => set('state', e.target.value)} placeholder="TX" className={INPUT} />
+                  </Field>
+                  <Field label="Phone">
+                    <input type="tel" value={modal.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="(512) 555-0100" className={INPUT} />
+                  </Field>
+                  <Field label="Email">
+                    <input type="email" value={modal.email || ''} onChange={e => set('email', e.target.value)} placeholder="joe@example.com" className={INPUT} />
+                  </Field>
+                  <div className="col-span-2">
+                    <Field label="Website">
+                      <input value={modal.website || ''} onChange={e => set('website', e.target.value)} placeholder="https://example.com" className={INPUT} />
+                    </Field>
+                  </div>
+                  <Field label="Status">
+                    <select value={modal.status || 'New'} onChange={e => set('status', e.target.value)} className={SELECT}>
+                      {STATUSES.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Priority">
+                    <select value={modal.priority || 'Medium'} onChange={e => set('priority', e.target.value)} className={SELECT}>
+                      {PRIORITIES.map(p => <option key={p}>{p}</option>)}
+                    </select>
+                  </Field>
+                  <div className="col-span-2">
+                    <Field label="Next Follow-up Date">
+                      <input type="date" value={modal.next_follow_up_at?.split('T')[0] || ''} onChange={e => set('next_follow_up_at', e.target.value)} className={INPUT} />
+                    </Field>
+                  </div>
+                  <div className="col-span-2">
+                    <Field label="Notes">
+                      <textarea
+                        value={modal.notes || ''}
+                        onChange={e => set('notes', e.target.value)}
+                        rows={3}
+                        placeholder="Any notes about this lead..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
-              <button onClick={() => setModal(null)} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">Cancel</button>
-              <button
-                onClick={save}
-                disabled={saving || !modal.business_name}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
-              >
-                {saving ? 'Saving...' : modal.id ? 'Save Changes' : 'Add Lead'}
-              </button>
-            </div>
+            {isEditing && (
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+                <button
+                  onClick={() => { if (modal.id) { setIsEditing(false) } else { setModal(null) } }}
+                  className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={save}
+                  disabled={saving || !modal.business_name}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+                >
+                  {saving ? 'Saving...' : modal.id ? 'Save Changes' : 'Add Lead'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -515,6 +576,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
       {children}
+    </div>
+  )
+}
+
+function ReadField({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
+      <p className="text-sm text-gray-700">{value || <span className="text-gray-300 italic">—</span>}</p>
     </div>
   )
 }
