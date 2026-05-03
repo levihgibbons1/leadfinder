@@ -459,7 +459,12 @@ export default function LeadsPage() {
                   <div className="col-span-2">
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">Website</p>
                     {modal.website
-                      ? <a href={modal.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline text-sm"><ExternalLink size={13} />{modal.website}</a>
+                      ? <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">{modal.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+                          <a href={modal.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 rounded font-medium transition-colors">
+                            <ExternalLink size={11} /> Open
+                          </a>
+                        </div>
                       : <span className="text-gray-400 text-sm italic">No website</span>
                     }
                   </div>
